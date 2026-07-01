@@ -93,3 +93,55 @@ the `CATEGORIES` dictionary at the top of `downloads_organizer.py` to customize.
   safe.
 - Use `--dry-run` on `organize` / `clean` any time you want to see the plan
   before committing to it.
+
+## System auditor (`system_auditor.py`)
+
+Finds what's quietly slowing your machine down. Like the organizer, it's
+**audit-only**: it reports and flags but never disables a startup entry or
+deletes anything itself. Two subcommands:
+
+```bash
+python3 system_auditor.py startup            # audit Windows auto-start + flag new
+python3 system_auditor.py startup --no-save  # audit without updating the baseline
+python3 system_auditor.py startup --json     # machine-readable output
+python3 system_auditor.py wsl                # WSL/Ubuntu disk-bloat report
+```
+
+### `startup` — Windows auto-start audit
+
+Designed to run from your WSL/Ubuntu terminal: under the hood it shells out to
+Windows via `powershell.exe` interop, so it audits the **Windows** side (where
+the things that actually slow your boot live) while you keep working the way you
+normally do. It also runs on native Windows.
+
+It inventories every auto-start source —
+
+- **Registry Run keys** (`HKCU`/`HKLM`, incl. `WOW6432Node` and `RunOnce`)
+- **Startup folders** (user + all-users)
+- **Scheduled tasks** triggered at logon or boot
+- **Auto-start services**
+
+— then **diffs against the last run** and highlights what's *new* or *gone*
+since you last checked. New persistence you didn't add is exactly what
+installers (and malware) leave behind, so this catches bloat and is a light
+security win too. The baseline is stored at
+`~/.local/state/system_auditor/startup_snapshot.json`; the first run just saves
+it, and each later run compares against it (use `--no-save` to peek without
+updating).
+
+Reading requires no admin; a few service/task details may be blank without an
+elevated shell. To actually disable something, use Task Manager > Startup,
+`msconfig`, or `Disable-ScheduledTask`.
+
+### `wsl` — disk-bloat report
+
+Runs inside WSL/Ubuntu and reports where disk space is going, with a
+copy-paste cleanup command for each:
+
+- apt package cache, system logs (journal), Docker data
+- pip / npm / `~/.cache` caches
+- the `ext4.vhdx` virtual disk, which **grows but never auto-shrinks** — it
+  reports the size (via interop) and the `wsl --manage --set-sparse` /
+  `Optimize-VHD` recipe to reclaim it
+
+Nothing is deleted — it prints the commands and leaves running them to you.
