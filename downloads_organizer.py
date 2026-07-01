@@ -49,8 +49,12 @@ OTHER = "Other"
 # Files with these extensions are partial/temporary and safe to delete.
 JUNK_EXTENSIONS: set[str] = {".crdownload", ".tmp", ".part", ".download"}
 
-# Installers older than this many days get moved to Archive/ during `clean`.
-ARCHIVE_AGE_DAYS = 60
+# Files not modified in this many days are considered stale and get moved to
+# Archive/ during `clean`. This uses modification time (mtime), which in a
+# Downloads folder is effectively the download date, since files here are rarely
+# edited after they arrive. (Access time / "last opened" is not used: modern
+# filesystems mount with relatime/noatime, so it isn't reliably updated on read.)
+STALE_AGE_DAYS = 30
 ARCHIVE_DIR = "Archive"
 
 
@@ -113,7 +117,7 @@ def unique_destination(dest: Path) -> Path:
 # Stage 1: preview
 # ---------------------------------------------------------------------------
 
-def preview(folder: Path) -> None:
+def preview(folder: Path, stale_days: int = STALE_AGE_DAYS) -> None:
     files = scan(folder)
     groups = group_by_category(files)
 
@@ -134,6 +138,14 @@ def preview(folder: Path) -> None:
     for category in order:
         for f in groups.get(category, []):
             print(f"  - {f.name} -> {category}/")
+
+    # Highlight stale files (informational only — preview never changes anything).
+    now = time.time()
+    stale = [f for f in files if _age_days(f, now) >= stale_days]
+    if stale:
+        print(f"\nStale ({stale_days}+ days, would archive on `clean`): {len(stale)}")
+        for f in stale:
+            print(f"  - {f.name} ({int(_age_days(f, now))} days) -> {ARCHIVE_DIR}/")
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +197,20 @@ def _age_days(path: Path, now: float) -> float:
     return (now - path.stat().st_mtime) / 86400
 
 
-def clean(folder: Path, dry_run: bool = False, age_days: int = ARCHIVE_AGE_DAYS) -> ActionReport:
+def managed_sources(folder: Path) -> list[Path]:
+    """Folders `clean` sweeps for stale files: the top level plus any existing
+    category folders (PDFs/, Images/, ...) and Other/. Archive/ is excluded so
+    already-archived files are never re-archived. Works before or after
+    `organize`, since it looks both at loose files and inside category folders."""
+    sources = [folder]
+    for name in list(CATEGORIES) + [OTHER]:
+        sub = folder / name
+        if sub.is_dir():
+            sources.append(sub)
+    return sources
+
+
+def clean(folder: Path, dry_run: bool = False, stale_days: int = STALE_AGE_DAYS) -> ActionReport:
     report = ActionReport()
     now = time.time()
 
@@ -215,22 +240,20 @@ def clean(folder: Path, dry_run: bool = False, age_days: int = ARCHIVE_AGE_DAYS)
                 report.errors.append((f, str(exc)))
                 print(f"  ERROR deleting {f.name}: {exc}", file=sys.stderr)
 
-    # Rule 3: archive old installers. Check both loose files and an existing
-    # Installers/ folder, so this works before or after `organize`.
-    installer_sources = [folder]
-    installers_dir = folder / "Installers"
-    if installers_dir.is_dir():
-        installer_sources.append(installers_dir)
-
+    # Rule 3: archive stale files. Any file not modified in `stale_days` days is
+    # moved to Archive/ for review — never deleted. We sweep the top level and
+    # every category folder (but not Archive/ itself), so this catches stale
+    # files whether or not `organize` has run. Leftover junk was already handled
+    # above; skip it here so a dry run doesn't double-count it.
     archive_dir = folder / ARCHIVE_DIR
-    for source in installer_sources:
+    for source in managed_sources(folder):
         for f in sorted(source.iterdir()):
             if not f.is_file() or f.name.startswith("."):
                 continue
-            if categorize(f) != "Installers":
+            if f.suffix.lower() in JUNK_EXTENSIONS:
                 continue
             age = _age_days(f, now)
-            if age < age_days:
+            if age < stale_days:
                 continue
             dest = unique_destination(archive_dir / f.name)
             try:
@@ -247,7 +270,7 @@ def clean(folder: Path, dry_run: bool = False, age_days: int = ARCHIVE_AGE_DAYS)
     # Cleanup report.
     print("\n--- Cleanup report ---")
     print(f"  Deleted:  {len(report.deleted)} file(s)")
-    print(f"  Archived: {len(report.archived)} installer(s) older than {age_days} days")
+    print(f"  Archived: {len(report.archived)} stale file(s) older than {stale_days} days")
     if report.errors:
         print(f"  Errors:   {len(report.errors)}")
     if dry_run:
@@ -277,16 +300,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_preview = sub.add_parser("preview", help="scan and report; changes nothing")
     add_folder_arg(p_preview)
+    p_preview.add_argument("--stale-days", type=int, default=STALE_AGE_DAYS,
+                           help=f"flag files older than this many days (default: {STALE_AGE_DAYS})")
 
     p_organize = sub.add_parser("organize", help="move files into per-category folders")
     add_folder_arg(p_organize)
     p_organize.add_argument("--dry-run", action="store_true", help="show actions without moving")
 
-    p_clean = sub.add_parser("clean", help="delete leftovers and archive old installers")
+    p_clean = sub.add_parser("clean", help="delete leftovers and archive stale files")
     add_folder_arg(p_clean)
     p_clean.add_argument("--dry-run", action="store_true", help="show actions without changing anything")
-    p_clean.add_argument("--age-days", type=int, default=ARCHIVE_AGE_DAYS,
-                         help=f"installer archive threshold in days (default: {ARCHIVE_AGE_DAYS})")
+    p_clean.add_argument("--stale-days", type=int, default=STALE_AGE_DAYS,
+                         help=f"archive files older than this many days (default: {STALE_AGE_DAYS})")
 
     return parser
 
@@ -307,11 +332,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if command == "preview":
-        preview(folder)
+        preview(folder, stale_days=args.stale_days)
     elif command == "organize":
         organize(folder, dry_run=args.dry_run)
     elif command == "clean":
-        clean(folder, dry_run=args.dry_run, age_days=args.age_days)
+        clean(folder, dry_run=args.dry_run, stale_days=args.stale_days)
     else:
         parser.print_help()
         return 2

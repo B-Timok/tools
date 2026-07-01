@@ -16,17 +16,17 @@ python3 downloads_organizer.py                      # preview ~/Downloads (defau
 python3 downloads_organizer.py preview ~/Downloads  # preview a specific folder
 python3 downloads_organizer.py organize             # move files into per-category folders
 python3 downloads_organizer.py organize --dry-run   # show what organize would do
-python3 downloads_organizer.py clean                # delete leftovers, archive old installers
+python3 downloads_organizer.py clean                # delete leftovers, archive stale files
 python3 downloads_organizer.py clean --dry-run      # show what clean would do
-python3 downloads_organizer.py clean --age-days 90  # change the installer-archive threshold
+python3 downloads_organizer.py clean --stale-days 90 # change the stale-file threshold
 ```
 
 Recommended workflow the first time: `preview` → `organize` → `clean`.
 
 ### What each command does
 
-**`preview`** — scans the folder, groups files by type, and prints what *would*
-happen. Touches nothing.
+**`preview`** — scans the folder, groups files by type, prints what *would*
+happen, and flags stale files. Touches nothing.
 
 ```
 Found 42 files
@@ -41,6 +41,11 @@ Would move:
   - resume.pdf -> PDFs/
   - photo.png -> Images/
   - node-v22.msi -> Installers/
+
+Stale (30+ days, would archive on `clean`): 3
+  - old-installer.msi (74 days) -> Archive/
+  - meeting-notes.pdf (41 days) -> Archive/
+  - screenshot.png (33 days) -> Archive/
 ```
 
 **`organize`** — creates category folders as needed and moves each file into
@@ -51,12 +56,25 @@ the right one. Name collisions are handled automatically (`resume.pdf` becomes
 
 - Deletes leftover partial downloads (`.crdownload`, `.tmp`, `.part`,
   `.download`).
-- Moves installers older than 60 days (configurable with `--age-days`) into an
-  `Archive/` folder.
+- Moves **stale files** — anything not modified in 30 days by default
+  (configurable with `--stale-days`) — into an `Archive/` folder. Stale files
+  are *archived, never deleted*, so you can review and remove them yourself.
 - Prints a summary report.
 
-`clean` looks in both the top level and the `Other/` / `Installers/` folders,
-so it works whether or not you've already run `organize`.
+`clean` sweeps the top level and every category folder (but never `Archive/`
+itself), so it works whether or not you've already run `organize`, and
+re-running it is safe.
+
+#### How "stale" is measured
+
+Staleness uses each file's **modification time** (`mtime`). In a Downloads
+folder that's effectively the download date, since files here are rarely edited
+after they arrive — so "stale" means "downloaded a while ago and never
+touched." Last-*access* time ("last opened") is deliberately **not** used:
+modern filesystems mount with `relatime`/`noatime` and don't reliably update it
+on reads, so it would give inconsistent results. The tradeoff is that a file
+you re-read often but never edit still counts as stale — which is why stale
+files are only archived for review, never deleted.
 
 ### Categories
 
