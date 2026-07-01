@@ -100,6 +100,27 @@ def group_by_category(files: list[Path]) -> dict[str, list[Path]]:
     return groups
 
 
+def human_size(nbytes: int) -> str:
+    """Format a byte count as a short human-readable string (e.g. '2.1 GB')."""
+    size = float(nbytes)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024 or unit == "TB":
+            return f"{int(size)} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"  # unreachable, keeps type-checkers happy
+
+
+def total_size(paths: list[Path]) -> int:
+    """Sum the on-disk size of the given files, skipping any that can't be stat'd."""
+    total = 0
+    for p in paths:
+        try:
+            total += p.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
 def unique_destination(dest: Path) -> Path:
     """Return a non-colliding path, appending ' (1)', ' (2)', ... if needed."""
     if not dest.exists():
@@ -122,17 +143,18 @@ def preview(folder: Path, stale_days: int = STALE_AGE_DAYS) -> None:
     groups = group_by_category(files)
 
     print(f"Scanning: {folder}")
-    print(f"Found {len(files)} files\n")
+    print(f"Found {len(files)} files ({human_size(total_size(files))})\n")
 
     if not files:
         print("Nothing to organize.")
         return
 
-    # Print counts in the order categories are defined, then Other.
+    # Print counts and sizes in the order categories are defined, then Other.
     order = list(CATEGORIES) + [OTHER]
     for category in order:
         if category in groups:
-            print(f"{category}: {len(groups[category])}")
+            members = groups[category]
+            print(f"{category}: {len(members)} ({human_size(total_size(members))})")
 
     print("\nWould move:")
     for category in order:
@@ -143,7 +165,8 @@ def preview(folder: Path, stale_days: int = STALE_AGE_DAYS) -> None:
     now = time.time()
     stale = [f for f in files if _age_days(f, now) >= stale_days]
     if stale:
-        print(f"\nStale ({stale_days}+ days, would archive on `clean`): {len(stale)}")
+        print(f"\nStale ({stale_days}+ days, would archive on `clean`): "
+              f"{len(stale)} ({human_size(total_size(stale))})")
         for f in stale:
             print(f"  - {f.name} ({int(_age_days(f, now))} days) -> {ARCHIVE_DIR}/")
 
@@ -158,6 +181,8 @@ class ActionReport:
     deleted: list[Path] = field(default_factory=list)
     archived: list[tuple[Path, Path]] = field(default_factory=list)
     errors: list[tuple[Path, str]] = field(default_factory=list)
+    freed_bytes: int = 0      # size of deleted junk
+    archived_bytes: int = 0   # size of files moved to Archive/
 
 
 def organize(folder: Path, dry_run: bool = False) -> ActionReport:
@@ -231,11 +256,13 @@ def clean(folder: Path, dry_run: bool = False, stale_days: int = STALE_AGE_DAYS)
             if f.suffix.lower() not in JUNK_EXTENSIONS:
                 continue
             try:
+                size = f.stat().st_size  # capture before deleting
                 if not dry_run:
                     f.unlink()
                 report.deleted.append(f)
+                report.freed_bytes += size
                 prefix = "Would delete" if dry_run else "Deleted"
-                print(f"  {prefix}: {f.name}")
+                print(f"  {prefix}: {f.name} ({human_size(size)})")
             except OSError as exc:
                 report.errors.append((f, str(exc)))
                 print(f"  ERROR deleting {f.name}: {exc}", file=sys.stderr)
@@ -255,22 +282,26 @@ def clean(folder: Path, dry_run: bool = False, stale_days: int = STALE_AGE_DAYS)
             age = _age_days(f, now)
             if age < stale_days:
                 continue
+            size = f.stat().st_size  # capture before moving
             dest = unique_destination(archive_dir / f.name)
             try:
                 if not dry_run:
                     archive_dir.mkdir(exist_ok=True)
                     f.rename(dest)
                 report.archived.append((f, dest))
+                report.archived_bytes += size
                 prefix = "Would archive" if dry_run else "Archived"
-                print(f"  {prefix}: {f.name} -> {ARCHIVE_DIR}/ ({int(age)} days old)")
+                print(f"  {prefix}: {f.name} -> {ARCHIVE_DIR}/ ({int(age)} days old, {human_size(size)})")
             except OSError as exc:
                 report.errors.append((f, str(exc)))
                 print(f"  ERROR archiving {f.name}: {exc}", file=sys.stderr)
 
     # Cleanup report.
+    freed_verb = "would free" if dry_run else "freed"
     print("\n--- Cleanup report ---")
-    print(f"  Deleted:  {len(report.deleted)} file(s)")
-    print(f"  Archived: {len(report.archived)} stale file(s) older than {stale_days} days")
+    print(f"  Deleted:  {len(report.deleted)} file(s) ({human_size(report.freed_bytes)} {freed_verb})")
+    print(f"  Archived: {len(report.archived)} stale file(s) older than {stale_days} days "
+          f"({human_size(report.archived_bytes)})")
     if report.errors:
         print(f"  Errors:   {len(report.errors)}")
     if dry_run:

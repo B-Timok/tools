@@ -29,24 +29,28 @@ Recommended workflow the first time: `preview` → `organize` → `clean`.
 happen, and flags stale files. Touches nothing.
 
 ```
-Found 42 files
+Found 42 files (6.7 GB)
 
-PDFs: 8
-Images: 12
-Archives: 5
-Installers: 4
-Other: 13
+PDFs: 8 (120.4 MB)
+Images: 12 (340.1 MB)
+Archives: 5 (1.2 GB)
+Installers: 4 (4.9 GB)
+Other: 13 (180.3 MB)
 
 Would move:
   - resume.pdf -> PDFs/
   - photo.png -> Images/
   - node-v22.msi -> Installers/
 
-Stale (30+ days, would archive on `clean`): 3
+Stale (30+ days, would archive on `clean`): 3 (2.1 GB)
   - old-installer.msi (74 days) -> Archive/
   - meeting-notes.pdf (41 days) -> Archive/
   - screenshot.png (33 days) -> Archive/
 ```
+
+Every count comes with a size total, so you can see at a glance where the
+space is actually going — the `Stale` and `Installers` lines are usually where
+the fat lives.
 
 **`organize`** — creates category folders as needed and moves each file into
 the right one. Name collisions are handled automatically (`resume.pdf` becomes
