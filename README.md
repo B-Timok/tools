@@ -2,7 +2,7 @@
 
 A small collection of personal utilities.
 
-## Downloads organizer (`main.py`)
+## Downloads organizer (`downloads_organizer.py`)
 
 Keeps your Downloads folder tidy. It works in three stages, each safer to run
 than the last, and **never** moves or deletes anything unless you explicitly
@@ -12,13 +12,13 @@ harmless.
 ### Usage
 
 ```bash
-python3 main.py                      # preview ~/Downloads (default, safe)
-python3 main.py preview ~/Downloads  # preview a specific folder
-python3 main.py organize             # move files into per-category folders
-python3 main.py organize --dry-run   # show what organize would do
-python3 main.py clean                # delete leftovers, archive old installers
-python3 main.py clean --dry-run      # show what clean would do
-python3 main.py clean --age-days 90  # change the installer-archive threshold
+python3 downloads_organizer.py                      # preview ~/Downloads (default, safe)
+python3 downloads_organizer.py preview ~/Downloads  # preview a specific folder
+python3 downloads_organizer.py organize             # move files into per-category folders
+python3 downloads_organizer.py organize --dry-run   # show what organize would do
+python3 downloads_organizer.py clean                # delete leftovers, archive old installers
+python3 downloads_organizer.py clean --dry-run      # show what clean would do
+python3 downloads_organizer.py clean --age-days 90  # change the installer-archive threshold
 ```
 
 Recommended workflow the first time: `preview` → `organize` → `clean`.
@@ -62,7 +62,7 @@ so it works whether or not you've already run `organize`.
 
 Files are sorted by extension into: **PDFs, Images, Documents, Archives,
 Installers, Audio, Video**, and anything unrecognized goes to **Other**. Edit
-the `CATEGORIES` dictionary at the top of `main.py` to customize.
+the `CATEGORIES` dictionary at the top of `downloads_organizer.py` to customize.
 
 ### Safety notes
 

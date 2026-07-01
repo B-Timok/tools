@@ -12,11 +12,11 @@ Nothing is ever moved or deleted unless you ask for it. `preview` is the
 default so an accidental run is harmless.
 
 Examples:
-    python main.py                      # preview the default Downloads folder
-    python main.py preview ~/Downloads  # preview a specific folder
-    python main.py organize             # actually move files into folders
-    python main.py clean                # apply cleanup rules
-    python main.py clean --dry-run      # show what clean would do
+    python downloads_organizer.py                      # preview ~/Downloads
+    python downloads_organizer.py preview ~/Downloads  # preview a folder
+    python downloads_organizer.py organize             # move files into folders
+    python downloads_organizer.py clean                # apply cleanup rules
+    python downloads_organizer.py clean --dry-run      # show what clean would do
 """
 
 from __future__ import annotations
