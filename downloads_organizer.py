@@ -168,7 +168,7 @@ def preview(folder: Path, stale_days: int = STALE_AGE_DAYS) -> None:
         print(f"\nStale ({stale_days}+ days, would archive on `clean`): "
               f"{len(stale)} ({human_size(total_size(stale))})")
         for f in stale:
-            print(f"  - {f.name} ({int(_age_days(f, now))} days) -> {ARCHIVE_DIR}/")
+            print(f"  - {f.name} ({int(_age_days(f, now))} days) -> {ARCHIVE_DIR}/{categorize(f)}/")
 
 
 # ---------------------------------------------------------------------------
@@ -283,15 +283,18 @@ def clean(folder: Path, dry_run: bool = False, stale_days: int = STALE_AGE_DAYS)
             if age < stale_days:
                 continue
             size = f.stat().st_size  # capture before moving
-            dest = unique_destination(archive_dir / f.name)
+            # Archive into per-category subfolders (Archive/Images/, ...) so the
+            # sorting from `organize` isn't flattened away for stale files.
+            category = categorize(f)
+            dest = unique_destination(archive_dir / category / f.name)
             try:
                 if not dry_run:
-                    archive_dir.mkdir(exist_ok=True)
+                    (archive_dir / category).mkdir(parents=True, exist_ok=True)
                     f.rename(dest)
                 report.archived.append((f, dest))
                 report.archived_bytes += size
                 prefix = "Would archive" if dry_run else "Archived"
-                print(f"  {prefix}: {f.name} -> {ARCHIVE_DIR}/ ({int(age)} days old, {human_size(size)})")
+                print(f"  {prefix}: {f.name} -> {ARCHIVE_DIR}/{category}/ ({int(age)} days old, {human_size(size)})")
             except OSError as exc:
                 report.errors.append((f, str(exc)))
                 print(f"  ERROR archiving {f.name}: {exc}", file=sys.stderr)

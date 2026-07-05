@@ -53,9 +53,9 @@ Would move:
   - node-v22.msi -> Installers/
 
 Stale (30+ days, would archive on `clean`): 3 (2.1 GB)
-  - old-installer.msi (74 days) -> Archive/
-  - meeting-notes.pdf (41 days) -> Archive/
-  - screenshot.png (33 days) -> Archive/
+  - old-installer.msi (74 days) -> Archive/Installers/
+  - meeting-notes.pdf (41 days) -> Archive/PDFs/
+  - screenshot.png (33 days) -> Archive/Images/
 ```
 
 Every count comes with a size total, so you can see at a glance where the
@@ -71,8 +71,10 @@ the right one. Name collisions are handled automatically (`resume.pdf` becomes
 - Deletes leftover partial downloads (`.crdownload`, `.tmp`, `.part`,
   `.download`).
 - Moves **stale files** — anything not modified in 30 days by default
-  (configurable with `--stale-days`) — into an `Archive/` folder. Stale files
-  are *archived, never deleted*, so you can review and remove them yourself.
+  (configurable with `--stale-days`) — into per-category subfolders under
+  `Archive/` (e.g. `Archive/Images/`), so the sorting from `organize` is kept.
+  Stale files are *archived, never deleted*, so you can review and remove
+  them yourself.
 - Prints a summary report.
 
 `clean` sweeps the top level and every category folder (but never `Archive/`
