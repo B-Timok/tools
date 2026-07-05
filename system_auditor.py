@@ -183,11 +183,16 @@ $root = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss'
 $out = @()
 if (Test-Path $root) {
   foreach ($k in (Get-ChildItem $root)) {
+    $vhd = $null  # reset each pass: SilentlyContinue must not leak the previous distro's path
     $props = Get-ItemProperty $k.PSPath
-    $bp = $props.BasePath
+    # Some distros (e.g. docker-desktop) register BasePath with the \\?\
+    # extended-length prefix, which Join-Path can't parse — strip it. They may
+    # also name their disk via VhdFileName instead of the default ext4.vhdx.
+    $bp = ([string]$props.BasePath) -replace '^\\\\\?\\', ''
     if ($bp) {
-      $vhd = Join-Path $bp 'ext4.vhdx'
-      if (Test-Path $vhd) {
+      $name = if ($props.VhdFileName) { [string]$props.VhdFileName } else { 'ext4.vhdx' }
+      $vhd = Join-Path $bp $name
+      if ($vhd -and (Test-Path $vhd)) {
         $out += [PSCustomObject]@{ distro = $props.DistributionName; path = $vhd; size = (Get-Item $vhd).Length }
       }
     }
