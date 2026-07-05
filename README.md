@@ -214,8 +214,14 @@ Reclaimable space:
 
 WSL virtual disk (Ubuntu): 38.7 GB
       path: C:\Users\brandon\AppData\Local\Packages\CanonicalGroupLimited...\LocalState\ext4.vhdx
-      Note: the vhdx grows but never auto-shrinks. To reclaim,
-      after `wsl --shutdown` run: wsl --manage <distro> --set-sparse true  (or Optimize-VHD).
+      Note: the vhdx grows but never auto-shrinks. To reclaim safely:
+        1. in WSL:      sudo fstrim -a
+        2. in Windows:  wsl --shutdown
+        3. in admin PowerShell, compact with diskpart:
+             select vdisk file=<path above>
+             attach vdisk readonly / compact vdisk / detach vdisk
+      (Don't use --set-sparse --allow-unsafe: WSL disabled sparse VHDs by default
+      over data-corruption risk.)
 
 (Audit only — nothing was deleted. Run the suggested commands yourself to reclaim space.)
 ```

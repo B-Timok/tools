@@ -361,9 +361,14 @@ def audit_wsl() -> int:
                 print(f"\nWSL virtual disk ({vhd.get('distro', '?')}): "
                       f"{human_size(int(vhd.get('size', 0)))}")
                 print(f"      path: {vhd.get('path', '?')}")
-            print("      Note: the vhdx grows but never auto-shrinks. To reclaim,")
-            print("      after `wsl --shutdown` run: "
-                  "wsl --manage <distro> --set-sparse true  (or Optimize-VHD).")
+            print("      Note: the vhdx grows but never auto-shrinks. To reclaim safely:")
+            print("        1. in WSL:      sudo fstrim -a")
+            print("        2. in Windows:  wsl --shutdown")
+            print("        3. in admin PowerShell, compact with diskpart:")
+            print("             select vdisk file=<path above>")
+            print("             attach vdisk readonly / compact vdisk / detach vdisk")
+            print("      (Don't use --set-sparse --allow-unsafe: WSL disabled sparse "
+                  "VHDs by default over data-corruption risk.)")
         except (RuntimeError, ValueError):
             pass  # interop not available — skip the vhdx section quietly
 
